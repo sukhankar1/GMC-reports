@@ -66,20 +66,20 @@ frappe.query_reports["Comparision Statement For Supplier Quotation"] = {
     formatter: function (value, row, column, data, default_formatter) {
         value = default_formatter(value, row, column, data);
 
-        // Render checkbox with stored state - read from global storage
         if (column.fieldname === "select_row") {
             if (!window.report_selected_rows) {
                 window.report_selected_rows = new Set();
             }
-            
-            // Create unique identifier for this row
-            const row_identifier = data.row_id || `${data.supplier_name || data.supplier}_${data.item_code}_${data.quotation}_${row}`;
-            
-            // Store it back to data so we can use it later
-            if (!data.row_id) {
-                data.row_id = row_identifier;
-            }
-            
+
+            // STABLE UNIQUE ID: Supplier Quotation name + Item Code
+            // This combination is unique and never changes on refresh/reorder
+            const quotation = data.quotation || data.parent || "";
+            const item_code = data.item_code || "";
+            const row_identifier = `${quotation}_${item_code}`;
+
+            // Assign stable ID to data for consistency
+            data.row_id = row_identifier;
+
             const checked = window.report_selected_rows.has(row_identifier) ? 'checked' : '';
             return `<input type="checkbox" class="row-select" data-row-id="${row_identifier}" ${checked}>`;
         }
@@ -98,12 +98,12 @@ frappe.query_reports["Comparision Statement For Supplier Quotation"] = {
     },
 
     onload: function(report) {
-        // Initialize global storage for selected rows
+        // Initialize global storage
         if (!window.report_selected_rows) {
             window.report_selected_rows = new Set();
         }
 
-        // Function to restore all checkboxes from storage
+        // Restore checkbox states after DOM updates
         function restoreCheckboxes() {
             $(".row-select").each(function() {
                 const row_id = $(this).data("row-id");
@@ -113,50 +113,46 @@ frappe.query_reports["Comparision Statement For Supplier Quotation"] = {
             });
         }
 
-        // Watch for any changes to the report table and restore checkboxes
-        const observer = new MutationObserver(function(mutations) {
-            restoreCheckboxes();
-        });
-
-        // Start observing the report wrapper for DOM changes
+        // Observe table changes
+        const observer = new MutationObserver(restoreCheckboxes);
         const reportWrapper = report.page.wrapper.find(".report-wrapper, .datatable, .dt-scrollable")[0];
         if (reportWrapper) {
-            observer.observe(reportWrapper, {
-                childList: true,
-                subtree: true
-            });
+            observer.observe(reportWrapper, { childList: true, subtree: true });
         }
 
-        // Also restore after any report refresh
+        // Restore after report refresh
         const originalRefresh = report.refresh.bind(report);
         report.refresh = function() {
             originalRefresh();
             setTimeout(restoreCheckboxes, 100);
         };
 
+        // Add Generate PO button
         setTimeout(() => {
             report.page.clear_primary_action();
 
             report.page.add_button(__("Generate Purchase Order"), function() {
-                // Filter selected rows from current data
+                // Use stable row identifier to find selected rows
                 const selected = report.data.filter(r => {
-                    const row_id = r.row_id || `${r.supplier_name || r.supplier}_${r.item_code}_${r.quotation}`;
+                    const quotation = r.quotation || r.parent || "";
+                    const item_code = r.item_code || "";
+                    const row_id = `${quotation}_${item_code}`;
                     return window.report_selected_rows.has(row_id);
                 });
 
                 if (!selected.length) {
-                    frappe.msgprint("Please select at least one row.");
+                    frappe.msgprint(__("Please select at least one row."));
                     return;
                 }
 
                 const suppliers = [...new Set(selected.map(r => r.supplier_name || r.supplier).filter(Boolean))];
                 if (suppliers.length > 1) {
-                    frappe.msgprint("All selected items must belong to the same supplier.");
+                    frappe.msgprint(__("All selected items must belong to the same supplier."));
                     return;
                 }
 
                 frappe.confirm(
-                    `Create new Purchase Order for ${suppliers[0]} with ${selected.length} items?`,
+                    __("Create new Purchase Order for {0} with {1} items?", [suppliers[0], selected.length]),
                     () => {
                         frappe.call({
                             method: "quantbit_hims_integration.api_for_report.generate_po_from_comparison",
@@ -176,7 +172,6 @@ frappe.query_reports["Comparision Statement For Supplier Quotation"] = {
                                             const frm = cur_frm;
                                             if (!frm) return;
 
-                                            // Header
                                             frm.set_value("company", data.company);
                                             frm.set_value("supplier", data.supplier);
                                             frm.set_value("transaction_date", data.transaction_date || frappe.datetime.get_today());
@@ -185,35 +180,37 @@ frappe.query_reports["Comparision Statement For Supplier Quotation"] = {
                                             frm.set_value("buying_price_list", data.buying_price_list || "Standard Buying");
                                             frm.set_value("ignore_pricing_rule", 1);
 
-                                            // Clear and add items safely
                                             frm.clear_table("items");
                                             data.items.forEach(item => {
                                                 let row = frm.add_child("items");
-                                                frappe.model.set_value(row.doctype, row.name, {
-                                                    item_code: item.item_code,
-                                                    item_name: item.item_name || item.item_code,
-                                                    description: item.description || item.item_name || item.item_code,
-                                                    qty: item.qty,
-                                                    uom: item.uom,
-                                                    stock_uom: item.stock_uom || item.uom,
-                                                    conversion_factor: item.conversion_factor || 1,
-                                                    rate: item.rate,
-                                                    amount: item.amount,
-                                                    price_list_rate: item.rate,
-                                                    schedule_date: item.schedule_date || frappe.datetime.get_today(),
-                                                    supplier_quotation: item.supplier_quotation || "",
-                                                    supplier_quotation_item: item.supplier_quotation_item || ""
-                                                });
+                                                row.item_code = item.item_code;
+                                                row.item_name = item.item_name || item.item_code;
+                                                row.description = item.description || item.item_name || item.item_code;
+                                                row.qty = item.qty;
+                                                row.uom = item.uom;
+                                                
+                                                row.stock_uom = item.stock_uom || item.uom;
+                                                row.conversion_factor = item.conversion_factor || 1;
+                                                row.rate = item.rate;
+                                                row.amount = item.amount;
+                                                row.schedule_date = item.schedule_date || frappe.datetime.get_today();
+                                                row.supplier_quotation = item.supplier_quotation || "";
+                                                row.supplier_quotation_item = item.supplier_quotation_item || "";
+                                                row.custom_free_qty = item.custom_free_qty || 0;
+                                                row.custom_mrp = item.custom_mrp || 0;
+                                                row.discount_percentage = item.discount_percentage || 0;
+                                                row.discount_amount = item.discount_amount || 0;
+                                                row.price_list_rate = item.price_list_rate || 0;
                                             });
 
                                             frm.refresh_field("items");
+                                            frm.fields_dict.items.grid.refresh();
 
-                                            // FORCE ALL TOTALS TO APPEAR
                                             frm.trigger("items");
                                             frm.trigger("total");
                                             frm.trigger("calculate_taxes_and_totals");
 
-                                            // LOCK RATE FOREVER
+                                            // Prevent rate changes
                                             frm.cscript.rate = function() {};
 
                                             frappe.show_alert({
@@ -233,16 +230,11 @@ frappe.query_reports["Comparision Statement For Supplier Quotation"] = {
             });
         }, 1000);
 
-        // Use event delegation on the parent wrapper for better persistence
+        // Handle checkbox changes with event delegation
         report.page.wrapper.off("change", ".row-select").on("change", ".row-select", function() {
             const row_id = $(this).data("row-id");
             const checked = this.checked;
 
-            if (!window.report_selected_rows) {
-                window.report_selected_rows = new Set();
-            }
-
-            // Update the global Set for persistence
             if (checked) {
                 window.report_selected_rows.add(row_id);
             } else {
