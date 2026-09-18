@@ -1,220 +1,217 @@
+# Copyright (c) 2026, Quantbit Technologies Pvt. Ltd. and contributors
+# For license information, please see license.txt
+
 import frappe
+from frappe.utils import flt, cstr
 
 def execute(filters=None):
-	columns = get_columns()
+	columns = get_columns(filters)
 	data = get_data(filters)
 	return columns, data
 
-def get_columns():
+def get_columns(filters=None):
 	return [
 		{
+			"label": "Bill No.",
 			"fieldname": "bill_no",
-			"label": "Bill No",
 			"fieldtype": "Data",
-			"width": 180
+			"width": 160
 		},
 		{
-			"fieldname": "patient_name",
+			"label": "Pay Mode",
+			"fieldname": "pay_mode",
+			"fieldtype": "Data",
+			"width": 120
+		},
+		{
 			"label": "Patient Name",
+			"fieldname": "patient_name",
 			"fieldtype": "Data",
+			"width": 220
+		},
+		{
+			"label": "Cash Amount",
+			"fieldname": "cash_amount",
+			"fieldtype": "Currency",
+			"width": 120
+		},
+		{
+			"label": "Card / Cheque Amount",
+			"fieldname": "card_cheque_amount",
+			"fieldtype": "Currency",
 			"width": 150
 		},
 		{
-			"fieldname": "department",
-			"label": "Department",
-			"fieldtype": "Link",
-			"options": "Department",
-			"width": 150
-		},
-		{
-			"fieldname": "cash",
-			"label": "Cash",
-			"fieldtype": "Currency",
-			"width": 120
-		},
-		{
-			"fieldname": "upi_hospital",
-			"label": "UPI Hospital",
-			"fieldtype": "Currency",
-			"width": 120
-		},
-		{
-			"fieldname": "credit_sale",
-			"label": "Credit Sale",
-			"fieldtype": "Currency",
-			"width": 120
-		},
-		{
-			"fieldname": "debit_card",
-			"label": "Debit Card",
-			"fieldtype": "Currency",
-			"width": 120
-		},
-		{
-			"fieldname": "credit_card",
-			"label": "Credit Card",
-			"fieldtype": "Currency",
-			"width": 120
-		},
-		{
-			"fieldname": "total_collection",
-			"label": "Total Collection",
+			"label": "Amount",
+			"fieldname": "amount",
 			"fieldtype": "Currency",
 			"width": 130
-		},
-		{
-			"fieldname": "total",
-			"label": "Total",
-			"fieldtype": "Currency",
-			"width": 120
 		}
 	]
 
 def get_data(filters):
-	conditions = get_conditions(filters)
-	
-	invoices = frappe.db.sql(f"""
+	if not filters:
+		filters = {}
+
+	conditions = []
+	params = {}
+
+	if filters.get("from_date_time"):
+		conditions.append("si.creation >= %(from_date_time)s")
+		params["from_date_time"] = filters.get("from_date_time")
+	elif filters.get("from_date"):
+		conditions.append("si.posting_date >= %(from_date)s")
+		params["from_date"] = filters.get("from_date")
+
+	if filters.get("to_date_time"):
+		conditions.append("si.creation <= %(to_date_time)s")
+		params["to_date_time"] = filters.get("to_date_time")
+	elif filters.get("to_date"):
+		conditions.append("si.posting_date <= %(to_date)s")
+		params["to_date"] = filters.get("to_date")
+
+	if filters.get("department"):
+		conditions.append("sb.department = %(department)s")
+		params["department"] = filters.get("department")
+
+	if filters.get("users"):
+		users = filters.get("users")
+		if isinstance(users, str):
+			import json
+			try:
+				users = json.loads(users)
+			except Exception:
+				users = [u.strip() for u in users.split(",") if u.strip()]
+		if users:
+			conditions.append("si.owner IN %(users)s")
+			params["users"] = tuple(users)
+
+	if filters.get("payment_type"):
+		ptype = filters.get("payment_type")
+		if ptype == "Cash":
+			conditions.append("EXISTS(SELECT 1 FROM `tabSales Invoice Payment` sip WHERE sip.parent = si.name AND sip.mode_of_payment = 'Cash')")
+		elif ptype == "Credit":
+			conditions.append("(si.outstanding_amount > 0 OR NOT EXISTS(SELECT 1 FROM `tabSales Invoice Payment` sip WHERE sip.parent = si.name AND sip.mode_of_payment = 'Cash'))")
+
+	where_clause = f"AND {' AND '.join(conditions)}" if conditions else ""
+
+	query = f"""
 		SELECT 
-			si.name,
-			si.owner,
-			sb.consolidated_invoice,
-			si.custom_patient_name,
-			sb.department,
+			si.name AS inv_name,
+			COALESCE(NULLIF(sb.consolidated_invoice, ''), si.name) AS bill_no,
+			COALESCE(NULLIF(si.custom_patient_name, ''), p.full_name, si.customer) AS patient_name,
+			COALESCE(NULLIF(sb.department, ''), 'KAMALNAYAN BAJAJ PHARMACY') AS department,
+			si.owner AS user_name,
 			si.grand_total,
-			sip.mode_of_payment,
-			sip.amount
+			(
+				SELECT GROUP_CONCAT(DISTINCT mode_of_payment SEPARATOR ', ')
+				FROM `tabSales Invoice Payment`
+				WHERE parent = si.name
+			) AS mode_of_payment,
+			(
+				SELECT SUM(amount)
+				FROM `tabSales Invoice Payment`
+				WHERE parent = si.name AND mode_of_payment = 'Cash'
+			) AS cash_paid,
+			(
+				SELECT SUM(amount)
+				FROM `tabSales Invoice Payment`
+				WHERE parent = si.name AND mode_of_payment IN ('Card', 'Credit Card', 'Debit Card', 'Cheque', 'Bank Draft', 'Online')
+			) AS card_paid
 		FROM `tabSales Invoice` si
-		INNER JOIN `tabSales Invoice Payment` sip ON sip.parent = si.name
-		INNER JOIN `tabSale Bill` sb ON si.name = sb.consolidated_invoice
-		WHERE si.docstatus = 1 {conditions}
-	""", filters, as_dict=1)
-	
-	user_invoices = {}
-	
-	for row in invoices:
-		user = row.owner
-		inv_id = row.name
-		
-		if user not in user_invoices:
-			user_invoices[user] = {}
-			
-		if inv_id not in user_invoices[user]:
-			user_invoices[user][inv_id] = {
-				"bill_no": row.consolidated_invoice,
-				"patient_name": row.custom_patient_name,
-				"department": row.department,
-				"cash": 0.0,
-				"upi_hospital": 0.0,
-				"credit_sale": 0.0,
-				"debit_card": 0.0,
-				"credit_card": 0.0,
-				"total_collection": 0.0,
-				"total": 0.0
-			}
-			
-		mop = row.mode_of_payment
-		# The user explicitly requested to use grand_total instead of the payment amount
-		amount = row.grand_total or 0.0
-		
-		if mop == "Cash":
-			user_invoices[user][inv_id]["cash"] += amount
-		elif mop == "Online":
-			user_invoices[user][inv_id]["upi_hospital"] += amount
-		elif mop in ("Bank Draft", "Cheque"):
-			user_invoices[user][inv_id]["debit_card"] += amount
-		elif mop == "Credit Card":
-			user_invoices[user][inv_id]["credit_card"] += amount
-			
-		if mop and mop != "Cash":
-			user_invoices[user][inv_id]["credit_sale"] += amount
+		LEFT JOIN `tabSale Bill` sb ON sb.consolidated_invoice = si.name
+		LEFT JOIN `tabPatient` p ON p.name = si.patient
+		WHERE si.docstatus = 1 {where_clause}
+		ORDER BY sb.department, si.owner, si.creation ASC
+	"""
+
+	rows = frappe.db.sql(query, params, as_dict=True)
+
+	if not rows:
+		return []
+
+	# Group by (Department, User)
+	grouped = {}
+	for r in rows:
+		dept = r.department or "KAMALNAYAN BAJAJ PHARMACY"
+		user = r.user_name or "Administrator"
+		key = (dept, user)
+		if key not in grouped:
+			grouped[key] = []
+		grouped[key].append(r)
 
 	data = []
-	
-	grand_totals = {
-		"cash": 0.0,
-		"upi_hospital": 0.0,
-		"credit_sale": 0.0,
-		"debit_card": 0.0,
-		"credit_card": 0.0,
-		"total_collection": 0.0,
-		"total": 0.0
-	}
-	for user, inv_map in user_invoices.items():
-		# The top header row has been removed per user request
-		
-		sub_totals = {
-			"cash": 0.0,
-			"upi_hospital": 0.0,
-			"credit_sale": 0.0,
-			"debit_card": 0.0,
-			"credit_card": 0.0,
-			"total_collection": 0.0,
-			"total": 0.0
-		}
-		
-		for inv_id, r in inv_map.items():
-			r["total_collection"] = r["cash"] + r["upi_hospital"] + r["debit_card"]
-			r["total"] = r["cash"] + r["upi_hospital"] + r["credit_sale"] + r["debit_card"] + r["credit_card"]
-			
-			for k in sub_totals:
-				sub_totals[k] += r[k]
-				grand_totals[k] += r[k]
-				
-			# Blank out zero values in the row
-			for k in sub_totals:
-				if r[k] == 0:
-					r[k] = ""
-				
-			data.append(r)
-			
-		# Add Sub Total row but label it with the user's name
-		sub_totals_row = {
-			"bill_no": f"<b>User Name : {user}</b>",
-			"patient_name": "",
-			"department": ""
-		}
-		for k in sub_totals:
-			sub_totals_row[k] = sub_totals[k] if sub_totals[k] != 0 else ""
-			
-		data.append(sub_totals_row)
-		
-		# Add empty row for spacing between users
-		data.append({})
-		
-	if data:
-		grand_totals_row = {
-			"bill_no": "<b>Grand Total</b>",
-			"patient_name": "",
-			"department": ""
-		}
-		for k in grand_totals:
-			grand_totals_row[k] = grand_totals[k] if grand_totals[k] != 0 else ""
-			
-		data.append(grand_totals_row)
-		
-	return data
 
-def get_conditions(filters):
-	conditions = ""
-	if filters:
-		if filters.get("from_date") and filters.get("to_date"):
-			conditions += " AND si.posting_date BETWEEN %(from_date)s AND %(to_date)s"
-		elif filters.get("from_date"):
-			conditions += " AND si.posting_date >= %(from_date)s"
-		elif filters.get("to_date"):
-			conditions += " AND si.posting_date <= %(to_date)s"
-			
-		if filters.get("department"):
-			conditions += " AND sb.department = %(department)s"
-			
-		if filters.get("users"):
-			users = filters.get("users")
-			if isinstance(users, str):
-				import json
-				try:
-					users = json.loads(users)
-				except:
-					users = [users]
-			filters["users"] = tuple(users)
-			conditions += " AND si.owner IN %(users)s"
-	return conditions
+	for (dept, user), records in grouped.items():
+		# Counter & Dept Header
+		data.append({
+			"bill_no": "<b>Counter Name :</b>",
+			"pay_mode": "",
+			"patient_name": "",
+			"cash_amount": None,
+			"card_cheque_amount": None,
+			"amount": None
+		})
+		data.append({
+			"bill_no": f"<b>Department Name : {dept}</b>",
+			"pay_mode": "",
+			"patient_name": "",
+			"cash_amount": None,
+			"card_cheque_amount": None,
+			"amount": None
+		})
+		data.append({
+			"bill_no": f"<b>User Name : {user}</b>",
+			"pay_mode": "",
+			"patient_name": f"<b>Cashier Name : {user}</b>",
+			"cash_amount": None,
+			"card_cheque_amount": None,
+			"amount": None
+		})
+		data.append({
+			"bill_no": "<b>Sale</b>",
+			"pay_mode": "",
+			"patient_name": "",
+			"cash_amount": None,
+			"card_cheque_amount": None,
+			"amount": None
+		})
+
+		sub_cash = 0.0
+		sub_card = 0.0
+		sub_total = 0.0
+
+		for rec in records:
+			c_amt = flt(rec.cash_paid)
+			card_amt = flt(rec.card_paid)
+			t_amt = flt(rec.grand_total)
+
+			pmode = rec.mode_of_payment
+			if not pmode:
+				pmode = "Credit" if t_amt > 0 else "Cash"
+
+			sub_cash += c_amt
+			sub_card += card_amt
+			sub_total += t_amt
+
+			data.append({
+				"bill_no": rec.bill_no,
+				"pay_mode": pmode,
+				"patient_name": rec.patient_name,
+				"cash_amount": c_amt if c_amt > 0 else 0.0,
+				"card_cheque_amount": card_amt if card_amt > 0 else 0.0,
+				"amount": t_amt
+			})
+
+		# Subtotal for User
+		data.append({
+			"bill_no": f"<b>Sub Total ({user})</b>",
+			"pay_mode": "",
+			"patient_name": "",
+			"cash_amount": sub_cash,
+			"card_cheque_amount": sub_card,
+			"amount": sub_total
+		})
+		data.append({})
+
+	return data
