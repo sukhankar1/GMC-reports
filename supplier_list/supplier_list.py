@@ -110,12 +110,6 @@ def get_columns():
 			"width": 140,
 		},
 		{
-			"label": _("IFSC Code"),
-			"fieldname": "ifsc_code",
-			"fieldtype": "Data",
-			"width": 110,
-		},
-		{
 			"label": _("Bank Account"),
 			"fieldname": "bank_account",
 			"fieldtype": "Data",
