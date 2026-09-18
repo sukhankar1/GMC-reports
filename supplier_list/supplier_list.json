@@ -1,0 +1,50 @@
+{
+ "add_total_row": 0,
+ "add_translate_data": 0,
+ "columns": [],
+ "creation": "2026-09-18 14:58:39.950974",
+ "disabled": 0,
+ "docstatus": 0,
+ "doctype": "Report",
+ "filters": [],
+ "idx": 0,
+ "is_standard": "Yes",
+ "json": "{\"columns\": [{\"label\": \"Supplier Code\", \"fieldname\": \"supplier_code\", \"fieldtype\": \"Link\", \"width\": 140, \"id\": \"supplier_code\", \"name\": \"Supplier Code\", \"editable\": false, \"compareValue\": null, \"options\": \"Supplier\"}, {\"label\": \"Supplier Name\", \"fieldname\": \"supplier_name\", \"fieldtype\": \"Data\", \"width\": 200, \"id\": \"supplier_name\", \"name\": \"Supplier Name\", \"editable\": false, \"compareValue\": null}, {\"label\": \"Category\", \"fieldname\": \"category\", \"fieldtype\": \"Link\", \"width\": 140, \"id\": \"category\", \"name\": \"Category\", \"editable\": false, \"compareValue\": null, \"options\": \"Supplier Group\"}, {\"label\": \"Transaction Type\", \"fieldname\": \"transaction_type\", \"fieldtype\": \"Data\", \"width\": 120, \"id\": \"transaction_type\", \"name\": \"Transaction Type\", \"editable\": false, \"compareValue\": null}, {\"label\": \"Address\", \"fieldname\": \"address\", \"fieldtype\": \"Data\", \"width\": 180, \"id\": \"address\", \"name\": \"Address\", \"editable\": false, \"compareValue\": null}, {\"label\": \"Contact Person\", \"fieldname\": \"contact_person\", \"fieldtype\": \"Data\", \"width\": 140, \"id\": \"contact_person\", \"name\": \"Contact Person\", \"editable\": false, \"compareValue\": null}, {\"label\": \"Contact Number\", \"fieldname\": \"contact_number\", \"fieldtype\": \"Data\", \"width\": 120, \"id\": \"contact_number\", \"name\": \"Contact Number\", \"editable\": false, \"compareValue\": null}, {\"label\": \"Email 1\", \"fieldname\": \"email_1\", \"fieldtype\": \"Data\", \"width\": 160, \"id\": \"email_1\", \"name\": \"Email 1\", \"editable\": false, \"compareValue\": null}, {\"label\": \"Email 2\", \"fieldname\": \"email_2\", \"fieldtype\": \"Data\", \"width\": 160, \"id\": \"email_2\", \"name\": \"Email 2\", \"editable\": false, \"compareValue\": null}, {\"label\": \"Manufacturer\", \"fieldname\": \"manufacturer\", \"fieldtype\": \"Data\", \"width\": 120, \"id\": \"manufacturer\", \"name\": \"Manufacturer\", \"editable\": false, \"compareValue\": null}, {\"label\": \"Department\", \"fieldname\": \"department\", \"fieldtype\": \"Data\", \"width\": 120, \"id\": \"department\", \"name\": \"Department\", \"editable\": false, \"compareValue\": null}, {\"label\": \"Drug Lic No\", \"fieldname\": \"drug_lic_no\", \"fieldtype\": \"Data\", \"width\": 120, \"id\": \"drug_lic_no\", \"name\": \"Drug Lic No\", \"editable\": false, \"compareValue\": null}, {\"label\": \"Payment Terms\", \"fieldname\": \"payment_terms\", \"fieldtype\": \"Data\", \"width\": 120, \"id\": \"payment_terms\", \"name\": \"Payment Terms\", \"editable\": false, \"compareValue\": null}, {\"label\": \"PAN No.\", \"fieldname\": \"pan_no\", \"fieldtype\": \"Data\", \"width\": 120, \"id\": \"pan_no\", \"name\": \"PAN No.\", \"editable\": false, \"compareValue\": null}, {\"label\": \"Bank Name\", \"fieldname\": \"bank_name\", \"fieldtype\": \"Data\", \"width\": 140, \"id\": \"bank_name\", \"name\": \"Bank Name\", \"editable\": false, \"compareValue\": null}, {\"label\": \"IFSC Code\", \"fieldname\": \"ifsc_code\", \"fieldtype\": \"Data\", \"width\": 110, \"id\": \"ifsc_code\", \"name\": \"IFSC Code\", \"editable\": false, \"compareValue\": null}, {\"label\": \"Bank Account\", \"fieldname\": \"bank_account\", \"fieldtype\": \"Data\", \"width\": 140, \"id\": \"bank_account\", \"name\": \"Bank Account\", \"editable\": false, \"compareValue\": null}, {\"label\": \"DL Valid From\", \"fieldname\": \"dl_valid_from\", \"fieldtype\": \"Date\", \"width\": 105, \"id\": \"dl_valid_from\", \"name\": \"DL Valid From\", \"editable\": false, \"compareValue\": null}, {\"label\": \"DL Valid Upto\", \"fieldname\": \"dl_valid_upto\", \"fieldtype\": \"Date\", \"width\": 105, \"id\": \"dl_valid_upto\", \"name\": \"DL Valid Upto\", \"editable\": false, \"compareValue\": null}, {\"label\": \"Status\", \"fieldname\": \"status\", \"fieldtype\": \"Data\", \"width\": 90, \"id\": \"status\", \"name\": \"Status\", \"editable\": false, \"compareValue\": null}], \"filters\": {}}",
+ "letter_head": null,
+ "modified": "2026-09-18 15:05:00.901616",
+ "modified_by": "Administrator",
+ "module": "Quantbit HIMS Integration",
+ "name": "Supplier List",
+ "owner": "Administrator",
+ "prepared_report": 0,
+ "ref_doctype": "Supplier",
+ "report_name": "Supplier List",
+ "report_type": "Script Report",
+ "roles": [
+  {
+   "role": "Purchase Manager"
+  },
+  {
+   "role": "Purchase Master Manager"
+  },
+  {
+   "role": "Stock User"
+  },
+  {
+   "role": "Accounts Manager"
+  },
+  {
+   "role": "Stock Manager"
+  },
+  {
+   "role": "Purchase User"
+  },
+  {
+   "role": "Accounts User"
+  },
+  {
+   "role": "Employee Self Service"
+  }
+ ],
+ "timeout": 0
+}
