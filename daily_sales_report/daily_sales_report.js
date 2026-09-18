@@ -1,4 +1,4 @@
-// Copyright (c) 2026, Quantbit Technologies Pvt Ltd and Contributers and contributors
+// Copyright (c) 2026, Quantbit Technologies Pvt Ltd and contributors
 // For license information, please see license.txt
 
 frappe.query_reports["Daily Sales Report"] = {
@@ -7,7 +7,7 @@ frappe.query_reports["Daily Sales Report"] = {
 			"fieldname": "from_date",
 			"label": __("From Date"),
 			"fieldtype": "Date",
-			"default": frappe.datetime.add_months(frappe.datetime.get_today(), -1),
+			"default": frappe.datetime.get_today(),
 			"reqd": 1
 		},
 		{
