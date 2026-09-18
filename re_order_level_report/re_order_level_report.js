@@ -1,36 +1,52 @@
+// Copyright (c) 2026, Quantbit HIMS Integration and Contributors
+// License: GNU General Public License v3. See license.txt
+
 frappe.query_reports["Re-Order Level Report"] = {
-    filters: [
-        {
-            fieldname: "from_date",
-            label: __("From Date"),
-            fieldtype: "Date",
-            default: erpnext.utils.get_fiscal_year(frappe.datetime.get_today(), true)[1],
-            reqd: 1,
-        },
-        {
-            fieldname: "to_date",
-            label: __("To Date"),
-            fieldtype: "Date",
-            default: frappe.datetime.get_today(),
-            reqd: 1,
-        },
-        {
-            fieldname: "item_group",
-            label: __("Item Group"),
-            fieldtype: "Link",
-            options: "Item Group",
-        },
-        {
-            fieldname: "brand",
-            label: __("Brand"),
-            fieldtype: "Link",
-            options: "Brand",
-        },
-        {
-            fieldname: "custom_category",
-            label: __("Category"),
-            fieldtype: "Link",
-            options: "Item Category",
-        },
-    ],
+	filters: [
+		{
+			fieldname: "date",
+			label: __("Date"),
+			fieldtype: "Date",
+			default: frappe.datetime.get_today(),
+			reqd: 1,
+			width: "90",
+		},
+		{
+			fieldname: "department",
+			label: __("Department"),
+			fieldtype: "Link",
+			options: "Department",
+			width: "120",
+		},
+		{
+			fieldname: "therapeutic_group",
+			label: __("Therapeutic Group"),
+			fieldtype: "Link",
+			options: "Classification",
+			width: "110",
+		},
+		{
+			fieldname: "therapeutic_sub_group",
+			label: __("Therapeutic Sub Group"),
+			fieldtype: "Link",
+			options: "Classification Type",
+			width: "110",
+		},
+		{
+			fieldname: "rol_amount",
+			label: __("ROL Amount"),
+			fieldtype: "Select",
+			options: "All\nBelow ROL\nAt/Above ROL",
+			default: "All",
+			width: "100",
+		},
+		{
+			fieldname: "company",
+			label: __("Company"),
+			fieldtype: "Link",
+			options: "Company",
+			default: frappe.defaults.get_user_default("Company"),
+			width: "100",
+		},
+	],
 };
