@@ -1,6 +1,3 @@
-// Copyright (c) 2026, Quantbit Technologies Pvt Ltd and Contributers and contributors
-// For license information, please see license.txt
-
 // Copyright (c) 2026, Quantbit HIMS Integration and Contributors
 // License: GNU General Public License v3. See license.txt
 
@@ -10,7 +7,8 @@ frappe.query_reports["GRN Details"] = {
 			fieldname: "from_date",
 			label: __("From Date"),
 			fieldtype: "Date",
-			default: frappe.datetime.add_months(frappe.datetime.get_today(), -1),
+			default: frappe.datetime.month_start(),
+			reqd: 1,
 			width: "80",
 		},
 		{
@@ -18,12 +16,29 @@ frappe.query_reports["GRN Details"] = {
 			label: __("To Date"),
 			fieldtype: "Date",
 			default: frappe.datetime.get_today(),
+			reqd: 1,
+			width: "80",
+		},
+		{
+			fieldname: "item_code",
+			label: __("Item Name"),
+			fieldtype: "Link",
+			options: "Item",
+			width: "120",
+		},
+		{
+			fieldname: "department",
+			label: __("Department"),
+			fieldtype: "Link",
+			options: "Department",
+			width: "100",
 		},
 		{
 			fieldname: "supplier",
 			label: __("Supplier"),
 			fieldtype: "Link",
 			options: "Supplier",
+			width: "100",
 		},
 		{
 			fieldname: "company",
@@ -31,30 +46,7 @@ frappe.query_reports["GRN Details"] = {
 			fieldtype: "Link",
 			options: "Company",
 			default: frappe.defaults.get_user_default("Company"),
-		},
-		{
-			fieldname: "item_code",
-			label: __("Item"),
-			fieldtype: "Link",
-			options: "Item",
-		},
-		{
-			fieldname: "item_group",
-			label: __("Item Group"),
-			fieldtype: "Link",
-			options: "Item Group",
-		},
-		{
-			fieldname: "warehouse",
-			label: __("Warehouse"),
-			fieldtype: "Link",
-			options: "Warehouse",
-		},
-		{
-			fieldname: "cost_center",
-			label: __("Cost Center"),
-			fieldtype: "Link",
-			options: "Cost Center",
+			width: "100",
 		},
 	],
 };
