@@ -2,112 +2,163 @@
 # For license information, please see license.txt
 
 import frappe
-from erpnext.accounts.report.purchase_register.purchase_register import _execute
-
-# Map of group_by filter value -> (fieldname, label) used as the grouping key
-GROUP_BY_FIELD_MAP = {
-	"Supplier": ("supplier", "Supplier"),
-	"Supplier Group": ("supplier_group", "Supplier Group"),
-	"Department": ("department", "Department"),
-}
-
-# fieldtypes that should be summed instead of just carried over from the first row
-NUMERIC_FIELDTYPES = ("Currency", "Float", "Int")
+from frappe import _
+from frappe.utils import flt
 
 
 def execute(filters=None):
-	filters = frappe._dict(filters or {})
-
-	department_column = {
-		"label": "Department",
-		"fieldname": "department",
-		"fieldtype": "Link",
-		"options": "Department",
-		"width": 120,
-	}
-
-	result = _execute(filters, additional_table_columns=[department_column])
-	columns, data = result[0], result[1]
-	data = list(data)
-
-	# Row-level department filter, same as Purchase Register Details
-	if filters.get("department"):
-		data = [row for row in data if row.get("department") == filters.get("department")]
-
-	group_by_key, group_by_label = GROUP_BY_FIELD_MAP.get(
-		filters.get("group_by") or "Supplier", GROUP_BY_FIELD_MAP["Supplier"]
-	)
-
-	summary_columns, summary_data = get_summary(columns, data, group_by_key, group_by_label)
-
-	return summary_columns, summary_data
+	filters = filters or {}
+	columns = get_columns()
+	data = get_data(filters)
+	return columns, data
 
 
-def get_summary(columns, data, group_by_key, group_by_label):
-	numeric_fields = [
-		col["fieldname"]
-		for col in columns
-		if col.get("fieldtype") in NUMERIC_FIELDTYPES and col.get("fieldname") != group_by_key
-	]
-
-	# Columns to display: grouping key + supplier name (if grouping by supplier) + numeric totals
-	summary_columns = [
+def get_columns():
+	return [
 		{
-			"label": group_by_label,
-			"fieldname": group_by_key,
-			"fieldtype": "Data" if group_by_key != "supplier" else "Link",
-			"options": "" if group_by_key != "supplier" else "Supplier",
-			"width": 180,
-		}
-	]
-
-	if group_by_key == "supplier":
-		summary_columns.append(
-			{
-				"label": "Supplier Name",
-				"fieldname": "supplier_name",
-				"fieldtype": "Data",
-				"width": 180,
-			}
-		)
-
-	summary_columns.append(
+			"label": _("Bill No."),
+			"fieldname": "bill_no",
+			"fieldtype": "Link",
+			"options": "Purchase Invoice",
+			"width": 160,
+		},
 		{
-			"label": "No. of Invoices",
-			"fieldname": "no_of_invoices",
-			"fieldtype": "Int",
+			"label": _("Bill Date"),
+			"fieldname": "bill_date",
+			"fieldtype": "Date",
 			"width": 110,
-		}
-	)
+		},
+		{
+			"label": _("Challan No."),
+			"fieldname": "challan_no",
+			"fieldtype": "Data",
+			"width": 160,
+		},
+		{
+			"label": _("Challan Date"),
+			"fieldname": "challan_date",
+			"fieldtype": "Date",
+			"width": 110,
+		},
+		{
+			"label": _("Supplier Name"),
+			"fieldname": "supplier_name",
+			"fieldtype": "Data",
+			"width": 220,
+		},
+		{
+			"label": _("Credit/Cash"),
+			"fieldname": "pay_mode",
+			"fieldtype": "Data",
+			"width": 120,
+		},
+		{
+			"label": _("Gross Amount"),
+			"fieldname": "gross_amount",
+			"fieldtype": "Currency",
+			"options": "currency",
+			"width": 140,
+		},
+	]
 
-	for col in columns:
-		if col.get("fieldname") in numeric_fields:
-			summary_columns.append(
-				{
-					"label": col.get("label"),
-					"fieldname": col.get("fieldname"),
-					"fieldtype": col.get("fieldtype"),
-					"width": col.get("width") or 120,
-				}
-			)
 
-	grouped = frappe._dict()
+def get_data(filters):
+	conditions, values = get_conditions(filters)
 
-	for row in data:
-		key = row.get(group_by_key) or "Not Set"
+	query = f"""
+		SELECT 
+			pi.name AS voucher_no,
+			COALESCE(NULLIF(pi.bill_no, ''), pi.name) AS bill_no,
+			COALESCE(pi.bill_date, pi.posting_date) AS bill_date,
+			COALESCE(
+				NULLIF(GROUP_CONCAT(DISTINCT pr.supplier_delivery_note SEPARATOR ', '), ''),
+				NULLIF(GROUP_CONCAT(DISTINCT pr.custom_sib_no SEPARATOR ', '), ''),
+				NULLIF(GROUP_CONCAT(DISTINCT pr.lr_no SEPARATOR ', '), ''),
+				NULLIF(GROUP_CONCAT(DISTINCT pii.purchase_receipt SEPARATOR ', '), ''),
+				NULLIF(pi.custom_sib_no, ''),
+				''
+			) AS challan_no,
+			COALESCE(
+				MAX(pr.custom_delivery_date),
+				MAX(pr.custom_sib_date),
+				MAX(pr.lr_date),
+				MAX(pr.posting_date),
+				pi.custom_sib_date,
+				pi.posting_date
+			) AS challan_date,
+			pi.supplier_name AS supplier_name,
+			pi.supplier AS supplier,
+			pi.mode_of_payment AS mode_of_payment,
+			pi.is_paid AS is_paid,
+			pi.outstanding_amount AS outstanding_amount,
+			pi.grand_total AS gross_amount,
+			pi.currency AS currency
+		FROM 
+			`tabPurchase Invoice` pi
+		LEFT JOIN 
+			`tabPurchase Invoice Item` pii ON pii.parent = pi.name
+		LEFT JOIN 
+			`tabPurchase Receipt` pr ON pr.name = pii.purchase_receipt
+		WHERE 
+			pi.docstatus = 1
+			{conditions}
+		GROUP BY 
+			pi.name
+		ORDER BY 
+			pi.posting_date DESC, pi.name DESC
+	"""
 
-		if key not in grouped:
-			grouped[key] = frappe._dict({group_by_key: key, "no_of_invoices": 0})
-			if group_by_key == "supplier":
-				grouped[key]["supplier_name"] = row.get("supplier_name")
-			for field in numeric_fields:
-				grouped[key][field] = 0
+	raw_data = frappe.db.sql(query, values, as_dict=True)
+	data = []
 
-		grouped[key]["no_of_invoices"] += 1
-		for field in numeric_fields:
-			grouped[key][field] = (grouped[key][field] or 0) + (row.get(field) or 0)
+	for row in raw_data:
+		pay_mode = row.get("mode_of_payment")
+		if not pay_mode:
+			if row.get("is_paid") or flt(row.get("outstanding_amount")) <= 0:
+				pay_mode = "Cash"
+			else:
+				pay_mode = "Credit"
 
-	summary_data = list(grouped.values())
-	summary_data.sort(key=lambda r: (r.get(group_by_key) or ""))
+		data.append({
+			"bill_no": row.get("bill_no"),
+			"bill_date": row.get("bill_date"),
+			"challan_no": row.get("challan_no"),
+			"challan_date": row.get("challan_date"),
+			"supplier_name": row.get("supplier_name") or row.get("supplier"),
+			"pay_mode": pay_mode,
+			"gross_amount": flt(row.get("gross_amount")),
+			"currency": row.get("currency"),
+		})
 
-	return summary_columns, summary_data
+	return data
+
+
+def get_conditions(filters):
+	conditions = []
+	values = {}
+
+	if filters.get("company"):
+		conditions.append("pi.company = %(company)s")
+		values["company"] = filters.get("company")
+
+	if filters.get("from_date"):
+		conditions.append("pi.posting_date >= %(from_date)s")
+		values["from_date"] = filters.get("from_date")
+
+	if filters.get("to_date"):
+		conditions.append("pi.posting_date <= %(to_date)s")
+		values["to_date"] = filters.get("to_date")
+
+	if filters.get("supplier"):
+		conditions.append("pi.supplier = %(supplier)s")
+		values["supplier"] = filters.get("supplier")
+
+	if filters.get("payment_type"):
+		payment_type = filters.get("payment_type").strip().lower()
+		if payment_type == "cash":
+			conditions.append("(pi.mode_of_payment LIKE '%%Cash%%' OR pi.is_paid = 1)")
+		elif payment_type == "credit":
+			conditions.append("(pi.mode_of_payment LIKE '%%Credit%%' OR (pi.is_paid = 0 AND (pi.mode_of_payment IS NULL OR pi.mode_of_payment = '' OR pi.mode_of_payment NOT LIKE '%%Cash%%')))")
+
+	cond_str = " AND " + " AND ".join(conditions) if conditions else ""
+	return cond_str, values
