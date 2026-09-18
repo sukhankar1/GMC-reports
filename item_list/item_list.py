@@ -201,12 +201,6 @@ def get_columns():
 			"width": 90
 		},
 		{
-			"label": "HSN/SAC Code",
-			"fieldname": "hsn_sac_code",
-			"fieldtype": "Data",
-			"width": 110
-		},
-		{
 			"label": "Status",
 			"fieldname": "status",
 			"fieldtype": "Data",
@@ -425,7 +419,6 @@ def get_data(filters):
 			"mrp": mrp_val,
 			"gp_value": flt(it.gp_value),
 			"gp_percent": flt(it.gp_percent),
-			"hsn_sac_code": it.hsn_sac_code or "",
 			"status": "Disabled" if it.disabled else "Active",
 			"created_by": it.created_by or "",
 			"created_date_time": it.created_date_time,
