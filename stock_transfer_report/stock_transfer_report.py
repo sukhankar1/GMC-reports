@@ -6,12 +6,21 @@ from frappe import _
 
 
 def execute(filters=None):
-	columns = get_columns()
-	data = get_data(filters)
+	if not filters:
+		filters = {}
+
+	view_type = filters.get("view_type", "Summary")
+	if view_type == "Detail":
+		columns = get_detail_columns()
+		data = get_detail_data(filters)
+	else:
+		columns = get_summary_columns()
+		data = get_summary_data(filters)
+
 	return columns, data
 
 
-def get_columns():
+def get_summary_columns():
 	return [
 		{"label": _("Req. No."), "fieldname": "req_no", "fieldtype": "Data", "width": 130},
 		{"label": _("Req Date"), "fieldname": "req_date", "fieldtype": "Date", "width": 110},
@@ -29,10 +38,30 @@ def get_columns():
 	]
 
 
-def get_data(filters):
-	if not filters:
-		filters = {}
+def get_detail_columns():
+	return [
+		{"label": _("Req. No."), "fieldname": "req_no", "fieldtype": "Data", "width": 130},
+		{"label": _("Item Code"), "fieldname": "item_code", "fieldtype": "Link", "options": "Item", "width": 120},
+		{"label": _("Item Name"), "fieldname": "item_name", "fieldtype": "Data", "width": 200},
+		{"label": _("Item Category"), "fieldname": "item_category", "fieldtype": "Data", "width": 140},
+		{"label": _("Sub Category"), "fieldname": "sub_category", "fieldtype": "Data", "width": 140},
+		{"label": _("Batch No."), "fieldname": "batch_no", "fieldtype": "Data", "width": 130},
+		{"label": _("Tr. No."), "fieldname": "tr_no", "fieldtype": "Data", "width": 130},
+		{"label": _("Date"), "fieldname": "date", "fieldtype": "Date", "width": 110},
+		{"label": _("From Dept."), "fieldname": "from_dept", "fieldtype": "Data", "width": 150},
+		{"label": _("To Dept."), "fieldname": "to_dept", "fieldtype": "Data", "width": 150},
+		{"label": _("Expiry Date"), "fieldname": "expiry_date", "fieldtype": "Date", "width": 110},
+		{"label": _("MRP"), "fieldname": "mrp", "fieldtype": "Currency", "width": 100},
+		{"label": _("Quantity"), "fieldname": "quantity", "fieldtype": "Float", "width": 90},
+		{"label": _("Price"), "fieldname": "price", "fieldtype": "Currency", "width": 100},
+		{"label": _("Amount"), "fieldname": "amount", "fieldtype": "Currency", "width": 110},
+		{"label": _("Unit Purchase Rate"), "fieldname": "unit_purchase_rate", "fieldtype": "Currency", "width": 130},
+		{"label": _("Purchase Amount"), "fieldname": "purchase_amount", "fieldtype": "Currency", "width": 130},
+		{"label": _("Issue Status"), "fieldname": "issue_status", "fieldtype": "Data", "width": 110}
+	]
 
+
+def get_conditions(filters):
 	conditions = ["se.docstatus = 1"]
 	values = {}
 
@@ -67,8 +96,11 @@ def get_data(filters):
 	elif filters.get("indent_type") == "Without Indent":
 		conditions.append("IFNULL(sed.material_request, '') = ''")
 
-	where_clause = " AND ".join(conditions)
+	return " AND ".join(conditions), values
 
+
+def get_summary_data(filters):
+	where_clause, values = get_conditions(filters)
 	query = f"""
 		SELECT
 			COALESCE(sed.material_request, '') AS req_no,
@@ -92,12 +124,48 @@ def get_data(filters):
 		WHERE {where_clause}
 		ORDER BY se.posting_date DESC, se.name DESC, sed.idx ASC
 	"""
-
 	res = frappe.db.sql(query, values, as_dict=True)
 
-	# Apply status filter in python if needed
 	if filters.get("status"):
 		st = filters.get("status").strip()
 		res = [r for r in res if r.get("status") == st]
+
+	return res
+
+
+def get_detail_data(filters):
+	where_clause, values = get_conditions(filters)
+	query = f"""
+		SELECT
+			COALESCE(sed.material_request, '') AS req_no,
+			COALESCE(sed.item_code, '') AS item_code,
+			COALESCE(sed.item_name, i.item_name, sed.item_code) AS item_name,
+			COALESCE(i.custom_material_category, i.custom_category, i.item_group, '') AS item_category,
+			COALESCE(i.item_group, '') AS sub_category,
+			COALESCE(sed.batch_no, '') AS batch_no,
+			se.name AS tr_no,
+			se.posting_date AS date,
+			COALESCE(se.department, se.from_warehouse, '') AS from_dept,
+			COALESCE(se.to_warehouse, '') AS to_dept,
+			b.expiry_date AS expiry_date,
+			COALESCE(b.custom_mrp, sed.valuation_rate, 0.0) AS mrp,
+			COALESCE(sed.qty, 0.0) AS quantity,
+			COALESCE(sed.basic_rate, sed.valuation_rate, 0.0) AS price,
+			COALESCE(sed.amount, 0.0) AS amount,
+			COALESCE(i.last_purchase_rate, sed.valuation_rate, 0.0) AS unit_purchase_rate,
+			(COALESCE(i.last_purchase_rate, sed.valuation_rate, 0.0) * COALESCE(sed.qty, 0.0)) AS purchase_amount,
+			'Issued' AS issue_status
+		FROM `tabStock Entry` se
+		INNER JOIN `tabStock Entry Detail` sed ON sed.parent = se.name
+		LEFT JOIN `tabItem` i ON i.name = sed.item_code
+		LEFT JOIN `tabBatch` b ON b.name = sed.batch_no
+		WHERE {where_clause}
+		ORDER BY se.posting_date DESC, se.name DESC, sed.idx ASC
+	"""
+	res = frappe.db.sql(query, values, as_dict=True)
+
+	if filters.get("status"):
+		st = filters.get("status").strip()
+		res = [r for r in res if r.get("issue_status") == st]
 
 	return res
